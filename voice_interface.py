@@ -69,7 +69,7 @@ _token_stats = {
     "openai_whisper_requests":        0,
     "openai_whisper_duration_seconds": 0.0,
     "openai_tts_chars":               0,
-    "session_start_time":             datetime.datetime.utcnow().isoformat() + "Z",
+    "session_start_time":             datetime.datetime.now(datetime.timezone.utc).isoformat(),
 }
 _stats_lock = threading.Lock()
 
@@ -80,7 +80,7 @@ class _StatsHandler(BaseHTTPRequestHandler):
         if self.path == "/stats":
             with _stats_lock:
                 data = dict(_token_stats)
-            data["current_time"] = datetime.datetime.utcnow().isoformat() + "Z"
+            data["current_time"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
             body = json.dumps(data).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
@@ -291,7 +291,8 @@ def _speak(text: str):
         r = openai_client.audio.speech.create(model="tts-1", voice=TTS_VOICE, input=input_text)
         raw = tempfile.mktemp(suffix=".mp3")
         processed = tempfile.mktemp(suffix=".mp3")
-        r.stream_to_file(raw)
+        with open(raw, "wb") as f:
+            f.write(r.content)
         sox = subprocess.run(
             ["sox", raw, processed, "pitch", "-80", "treble", "+3"],
             capture_output=True
