@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>K2S0 Token Dashboard — Live</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:         #0d0f14;
+      --card-bg:    #161920;
+      --card-border:#252830;
+      --accent:     #3b82f6;
+      --accent2:    #8b5cf6;
+      --accent3:    #10b981;
+      --text:       #e2e8f0;
+      --muted:      #64748b;
+      --green:      #22c55e;
+      --red:        #ef4444;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Fira Mono', 'Consolas', monospace;
+      min-height: 100vh;
+      padding: 2rem;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    header h1 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      color: var(--text);
+    }
+
+    header .subtitle {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    /* Status dot */
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--red);
+      flex-shrink: 0;
+      transition: background 0.3s;
+    }
+    .status-dot.live {
+      background: var(--green);
+      animation: pulse 1.4s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.3; }
+    }
+
+    /* Meta bar */
+    .meta-bar {
+      display: flex;
+      gap: 2rem;
+      font-size: 0.7rem;
+      color: var(--muted);
+      margin-bottom: 2rem;
+      flex-wrap: wrap;
+    }
+    .meta-bar span b { color: var(--text); }
+
+    /* Grid */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 1.25rem;
+    }
+
+    /* Card */
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: var(--card-accent, var(--accent));
+      border-radius: 12px 12px 0 0;
+    }
+
+    .card-haiku  { --card-accent: var(--accent); }
+    .card-whisper { --card-accent: var(--accent2); }
+    .card-tts    { --card-accent: var(--accent3); }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      margin-bottom: 1.25rem;
+    }
+    .card-icon { font-size: 1.3rem; }
+    .card-title {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: 0.04em;
+    }
+
+    /* Stat rows */
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      padding: 0.4rem 0;
+      border-bottom: 1px solid var(--card-border);
+      font-size: 0.75rem;
+    }
+    .stat-row:last-child { border-bottom: none; padding-bottom: 0; }
+
+    .stat-label { color: var(--muted); }
+    .stat-value {
+      color: var(--text);
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+    .stat-value.highlight {
+      color: var(--accent3);
+      font-size: 0.9rem;
+    }
+    .stat-note {
+      font-size: 0.65rem;
+      color: var(--muted);
+      margin-top: 0.75rem;
+      font-style: italic;
+    }
+
+    /* Uptime card */
+    .card-uptime { --card-accent: #f59e0b; }
+    .uptime-display {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #f59e0b;
+      letter-spacing: 0.05em;
+      text-align: center;
+      padding: 0.75rem 0;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Error overlay */
+    .error-msg {
+      display: none;
+      color: var(--red);
+      font-size: 0.75rem;
+      margin-top: 1.5rem;
+      padding: 0.75rem 1rem;
+      background: rgba(239,68,68,0.08);
+      border: 1px solid rgba(239,68,68,0.25);
+      border-radius: 8px;
+    }
+
+    footer {
+      margin-top: 2.5rem;
+      font-size: 0.65rem;
+      color: var(--muted);
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="status-dot" id="statusDot"></div>
+  <div>
+    <h1>K2S0 Token Dashboard — Live</h1>
+    <div class="subtitle">Polling http://localhost:7799/stats every 2s</div>
+  </div>
+</header>
+
+<div class="meta-bar">
+  <span>Session start: <b id="sessionStart">—</b></span>
+  <span>Uptime: <b id="uptimeMeta">—</b></span>
+  <span>Last updated: <b id="lastUpdated">—</b></span>
+</div>
+
+<div class="grid">
+
+  <!-- Anthropic Haiku -->
+  <div class="card card-haiku">
+    <div class="card-header">
+      <span class="card-icon">🧠</span>
+      <span class="card-title">Anthropic Claude Haiku</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Input tokens</span>
+      <span class="stat-value" id="haikuIn">—</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Output tokens</span>
+      <span class="stat-value" id="haikuOut">—</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Total tokens</span>
+      <span class="stat-value" id="haikuTotal">—</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Est. input cost</span>
+      <span class="stat-value" id="haikuCostIn">—</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Est. output cost</span>
+      <span class="stat-value" id="haikuCostOut">—</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Est. total cost</span>
+      <span class="stat-value highlight" id="haikuCostTotal">—</span>
+    </div>
+    <div class="stat-note">$0.00080 / 1K input · $0.00400 / 1K output</div>
+  </div>
+
+  <!-- OpenAI Whisper -->
+  <div class="card card-whisper">
+    <div class="card-header">
+      <span class="card-icon">🎤</span>
+      <span class="card-title">OpenAI Whisper (STT)</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Requests</span>
+      <span class="stat-value" id="whisperReqs">—</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Audio transcribed</span>
+      <span class="stat-value" id="whisperDuration">—</span>
+    </div>
+    <div class="stat-note">Billed at $0.006 / min — duration tracked for reference</div>
+  </div>
+
+  <!-- OpenAI TTS -->
+  <div class="card card-tts">
+    <div class="card-header">
+      <span class="card-icon">🔊</span>
+      <span class="card-title">OpenAI TTS</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Characters sent</span>
+      <span class="stat-value" id="ttsChars">—</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Est. cost</span>
+      <span class="stat-value highlight" id="ttsCost">—</span>
+    </div>
+    <div class="stat-note">$0.015 / 1K characters</div>
+  </div>
+
+  <!-- Uptime -->
+  <div class="card card-uptime">
+    <div class="card-header">
+      <span class="card-icon">⏱</span>
+      <span class="card-title">Session Uptime</span>
+    </div>
+    <div class="uptime-display" id="uptimeDisplay">00:00:00</div>
+  </div>
+
+</div>
+
+<div class="error-msg" id="errorMsg">
+  ⚠ Cannot reach stats server at localhost:7799. Is voice_interface.py running?
+</div>
+
+<footer>K2S0 Voice Interface · token-dashboard.html · auto-refreshing</footer>
+
+<script>
+  const STATS_URL = 'http://localhost:7799/stats';
+  const POLL_MS   = 2000;
+
+  let _sessionStartMs = null; // parsed from server
+  let _serverReachable = false;
+
+  function fmt(n, decimals = 0) {
+    if (n === undefined || n === null) return '—';
+    return Number(n).toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  }
+
+  function fmtUSD(dollars) {
+    if (dollars < 0.001) return '$0.00';
+    return '$' + dollars.toFixed(4);
+  }
+
+  function fmtDuration(secs) {
+    const m = Math.floor(secs / 60);
+    const s = Math.floor(secs % 60);
+    return `${m}m ${s}s`;
+  }
+
+  function fmtUptime(secs) {
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = Math.floor(secs % 60);
+    return [h, m, s].map(v => String(v).padStart(2, '0')).join(':');
+  }
+
+  function updateUptime() {
+    if (!_sessionStartMs) return;
+    const elapsed = (Date.now() - _sessionStartMs) / 1000;
+    const str = fmtUptime(elapsed);
+    document.getElementById('uptimeDisplay').textContent = str;
+    document.getElementById('uptimeMeta').textContent = str;
+  }
+
+  function applyStats(data) {
+    // Haiku
+    const hIn  = data.anthropic_haiku_input_tokens  || 0;
+    const hOut = data.anthropic_haiku_output_tokens || 0;
+    const hTot = hIn + hOut;
+    const costIn  = (hIn  / 1000) * 0.00080;
+    const costOut = (hOut / 1000) * 0.00400;
+    document.getElementById('haikuIn').textContent    = fmt(hIn);
+    document.getElementById('haikuOut').textContent   = fmt(hOut);
+    document.getElementById('haikuTotal').textContent = fmt(hTot);
+    document.getElementById('haikuCostIn').textContent    = fmtUSD(costIn);
+    document.getElementById('haikuCostOut').textContent   = fmtUSD(costOut);
+    document.getElementById('haikuCostTotal').textContent = fmtUSD(costIn + costOut);
+
+    // Whisper
+    document.getElementById('whisperReqs').textContent     = fmt(data.openai_whisper_requests || 0);
+    document.getElementById('whisperDuration').textContent = fmtDuration(data.openai_whisper_duration_seconds || 0);
+
+    // TTS
+    const chars = data.openai_tts_chars || 0;
+    const ttsCost = (chars / 1000) * 0.015;
+    document.getElementById('ttsChars').textContent = fmt(chars);
+    document.getElementById('ttsCost').textContent  = fmtUSD(ttsCost);
+
+    // Session start / uptime
+    if (data.session_start_time && !_sessionStartMs) {
+      _sessionStartMs = new Date(data.session_start_time).getTime();
+      document.getElementById('sessionStart').textContent =
+        new Date(data.session_start_time).toLocaleTimeString();
+    }
+
+    // Last updated
+    if (data.current_time) {
+      document.getElementById('lastUpdated').textContent =
+        new Date(data.current_time).toLocaleTimeString();
+    }
+  }
+
+  function setLive(live) {
+    const dot = document.getElementById('statusDot');
+    const err = document.getElementById('errorMsg');
+    if (live) {
+      dot.classList.add('live');
+      err.style.display = 'none';
+    } else {
+      dot.classList.remove('live');
+      err.style.display = 'block';
+    }
+    _serverReachable = live;
+  }
+
+  async function poll() {
+    try {
+      const res = await fetch(STATS_URL, { cache: 'no-store' });
+      if (!res.ok) throw new Error('non-200');
+      const data = await res.json();
+      setLive(true);
+      applyStats(data);
+    } catch (e) {
+      setLive(false);
+    }
+  }
+
+  // Uptime ticks every second
+  setInterval(updateUptime, 1000);
+  // Stats poll every 2s
+  setInterval(poll, POLL_MS);
+  // Immediate first poll
+  poll();
+</script>
+</body>
+</html>
